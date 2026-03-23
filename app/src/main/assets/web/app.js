@@ -173,7 +173,7 @@
         const output = document.getElementById('output');
 
         if (!auth.jwtValid) {
-            setStatus(status, '登录已失效，正在返回登录页...', 'error');
+            setStatus(status, '登录已失效，正在返回登录页重新认证...', 'error');
             redirect(LOGIN_PAGE);
             return;
         }
@@ -255,14 +255,14 @@
                 return;
             }
             if (!currentSportId || !sportIdFetchedAtMs) {
-                sportIdWaitHint.textContent = '尚未记录 SportId 时间。';
+                sportIdWaitHint.textContent = '尚未记录 SportId 时间。你可以手动填写，或点击“第一步：获取 SportId”。';
                 sportIdWaitHint.className = 'status info';
                 return;
             }
 
             const elapsedMs = Math.max(0, Date.now() - sportIdFetchedAtMs);
             const passedMinutes = Math.floor(elapsedMs / 60000);
-            sportIdWaitHint.textContent = 'SportId：' + currentSportId + '；记录时间：' + formatSportIdTime(sportIdFetchedAtMs) + '；已等待 ' + formatWaitDuration(sportIdFetchedAtMs) + '（前端每秒自动刷新，仅供参考）';
+            sportIdWaitHint.textContent = '当前 SportId：' + currentSportId + '；记录时间：' + formatSportIdTime(sportIdFetchedAtMs) + '；已等待 ' + formatWaitDuration(sportIdFetchedAtMs) + '（前端每秒自动刷新，仅供你判断时机）';
             sportIdWaitHint.className = 'status ' + (passedMinutes >= 15 ? 'success' : 'info');
         }
 
@@ -298,7 +298,7 @@
             }
             setStatus(
                 status,
-                (prefix || 'SportId 已保存') + '：' + currentSportId + '；记录时间：' + formatSportIdTime(sportIdFetchedAtMs) + '（已等待 ' + formatWaitDuration(sportIdFetchedAtMs) + '）',
+                (prefix || 'SportId 已保存') + '：' + currentSportId + '；记录时间：' + formatSportIdTime(sportIdFetchedAtMs) + '。你现在可以继续生成 JSON。',
                 'success'
             );
             renderSportIdWaitHint();
@@ -309,12 +309,12 @@
             const studentName = (studentNameInput && studentNameInput.value || '').trim();
 
             if (!studentId) {
-                setStatus(status, '请输入学号。', 'error');
+                setStatus(status, '请先填写学号，再继续下一步。', 'error');
                 studentIdInput && studentIdInput.focus();
                 return null;
             }
             if (!studentName) {
-                setStatus(status, '请输入姓名。', 'error');
+                setStatus(status, '请先填写姓名，再继续下一步。', 'error');
                 studentNameInput && studentNameInput.focus();
                 return null;
             }
@@ -337,7 +337,7 @@
 
             const text = (rawResponse == null ? '' : String(rawResponse)).trim();
             if (!text) {
-                return { sportId: '', error: '未返回 SportId。', timestampMs: 0 };
+                return { sportId: '', error: '未返回 SportId，请稍后重试。', timestampMs: 0 };
             }
 
             const json = safeParseJson(text, null);
@@ -361,7 +361,7 @@
             if (hasBridgeMethod('requestSportId')) {
                 return Promise.resolve(window.Bridge.requestSportId(studentId, studentName));
             }
-            return Promise.reject(new Error('请先在 app.js 的 requestSportId() 中实现 SportId 请求逻辑。'));
+            return Promise.reject(new Error('当前环境还没有实现 SportId 请求入口，请先在 app.js 中补充 requestSportId()。'));
         }
 
         if (studentIdInput) {
@@ -386,7 +386,7 @@
                 if (currentSportId) {
                     showSportIdSavedStatus('已手动保存 SportId');
                 } else {
-                    setStatus(status, '已清空已保存的 SportId。', 'info');
+                    setStatus(status, '已清空已保存的 SportId；如需继续，可重新填写或点击第一步获取。', 'info');
                     renderSportIdWaitHint();
                 }
             });
@@ -400,7 +400,7 @@
                 }
 
                 saveFormDraft(identity.studentId, identity.studentName);
-                setStatus(status, '正在请求 SportId...', 'info');
+                setStatus(status, '正在获取 SportId，请稍候...', 'info');
                 sportIdButton.disabled = true;
 
                 Promise.resolve(requestSportId(identity.studentId, identity.studentName)).then(function (rawResponse) {
@@ -409,7 +409,7 @@
                         throw new Error(parsed.error);
                     }
                     if (!parsed.sportId) {
-                        throw new Error('请求成功但未获取到 SportId。');
+                        throw new Error('请求成功，但没有拿到可用的 SportId。');
                     }
 
                     currentSportId = parsed.sportId;
@@ -420,7 +420,7 @@
                     startSportIdWaitTimer();
                     setStatus(
                         status,
-                        'SportId 获取成功：' + currentSportId + '；获取时间：' + formatSportIdTime(sportIdFetchedAtMs) + '（已等待 ' + formatWaitDuration(sportIdFetchedAtMs) + '）',
+                        'SportId 获取成功：' + currentSportId + '；获取时间：' + formatSportIdTime(sportIdFetchedAtMs) + '。下一步可以直接生成 UploadJsonSports。',
                         'success'
                     );
                 }).catch(function (error) {
@@ -431,7 +431,7 @@
                     clearSportIdDraft();
                     stopSportIdWaitTimer();
                     renderSportIdWaitHint();
-                    setStatus(status, '获取 SportId 失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+                    setStatus(status, '获取 SportId 失败：' + (error && error.message ? error.message : '未知错误') + '。你也可以手动填写 SportId。', 'error');
                 }).finally(function () {
                     sportIdButton.disabled = false;
                 });
@@ -445,13 +445,13 @@
                     return;
                 }
                 if (!currentSportId || sportIdForIdentity !== identity.identityKey) {
-                    setStatus(status, '未匹配到当前学号/姓名对应的 SportId，第二步仍会继续执行。', 'info');
+                    setStatus(status, '当前 SportId 与这组学号/姓名未匹配，系统仍会继续生成，但请你自行确认是否可用。', 'info');
                 }
 
                 if (currentSportId && sportIdFetchedAtMs) {
                     setStatus(
                         status,
-                        '正在生成 UploadJsonSports...（SportId 记录时间：' + formatSportIdTime(sportIdFetchedAtMs) + '，已等待 ' + formatWaitDuration(sportIdFetchedAtMs) + '）',
+                        '正在生成 UploadJsonSports...（参考：SportId 记录时间 ' + formatSportIdTime(sportIdFetchedAtMs) + '，已等待 ' + formatWaitDuration(sportIdFetchedAtMs) + '）',
                         'info'
                     );
                 }
@@ -464,12 +464,12 @@
                 const result = safeParseJson(resultText, null);
 
                 if (!result) {
-                    setStatus(status, '生成失败：返回内容不是有效 JSON。', 'error');
+                    setStatus(status, '生成失败：返回内容不是有效 JSON，请检查原始输出。', 'error');
                     output.value = resultText || '';
                     return;
                 }
                 if (result.error) {
-                    setStatus(status, result.error, 'error');
+                    setStatus(status, '生成失败：' + result.error, 'error');
                     output.value = JSON.stringify(result, null, 2);
                     return;
                 }
@@ -477,7 +477,7 @@
                 if (typeof result === 'object' && result !== null) {
                     result.sportId = currentSportId;
                 }
-                setStatus(status, '生成成功，可编辑 JSON 后发送。', 'success');
+                setStatus(status, '生成成功。建议先检查 JSON 内容，再决定是否提交。', 'success');
                 output.value = JSON.stringify(result, null, 2);
             });
         }
@@ -487,18 +487,18 @@
             formatButton.addEventListener('click', function () {
                 const currentText = output.value.trim();
                 if (!currentText) {
-                    setStatus(status, '没有内容可格式化。', 'error');
+                    setStatus(status, '当前没有可格式化的内容，请先生成结果。', 'error');
                     return;
                 }
 
                 const parsed = safeParseJson(currentText, null);
                 if (!parsed) {
-                    setStatus(status, '格式化失败：JSON 格式不合法。', 'error');
+                    setStatus(status, '格式化失败：当前内容不是合法 JSON。', 'error');
                     return;
                 }
 
                 output.value = JSON.stringify(parsed, null, 2);
-                setStatus(status, '格式化成功。', 'success');
+                setStatus(status, '格式化完成，已按缩进整理好 JSON。', 'success');
             });
         }
 
@@ -507,13 +507,13 @@
             copyButton.addEventListener('click', function () {
                 const text = output.value.trim();
                 if (!text) {
-                    setStatus(status, '没有内容可复制。', 'error');
+                    setStatus(status, '当前没有可复制的内容，请先生成结果。', 'error');
                     return;
                 }
 
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(text).then(function () {
-                        setStatus(status, '已复制到剪贴板。', 'success');
+                        setStatus(status, '已复制结果到剪贴板。', 'success');
                     }).catch(function () {
                         fallbackCopy(text);
                     });
@@ -528,9 +528,9 @@
                     textarea.select();
                     try {
                         document.execCommand('copy');
-                        setStatus(status, '已复制到剪贴板。', 'success');
+                        setStatus(status, '已复制结果到剪贴板。', 'success');
                     } catch (err) {
-                        setStatus(status, '复制失败。', 'error');
+                        setStatus(status, '复制失败，请稍后重试。', 'error');
                     }
                     document.body.removeChild(textarea);
                 }
@@ -542,27 +542,27 @@
             submitButton.addEventListener('click', function () {
                 const currentOutput = output.value.trim();
                 if (!currentOutput || currentOutput === '{}') {
-                    setStatus(status, '请先生成 UploadJsonSports。', 'error');
+                    setStatus(status, '请先完成第二步生成 JSON，再进行提交。', 'error');
                     return;
                 }
 
                 const resultJson = safeParseJson(currentOutput, null);
                 if (!resultJson || resultJson.error) {
-                    setStatus(status, '当前输出不是有效的 UploadJsonSports JSON。', 'error');
+                    setStatus(status, '当前输出不是可提交的 UploadJsonSports JSON，请先检查内容。', 'error');
                     return;
                 }
 
                 if (!hasBridgeMethod('submitSportsData')) {
-                    setStatus(status, '当前环境不支持 HTTP 提交接口。', 'error');
+                    setStatus(status, '当前环境不支持提交接口。', 'error');
                     return;
                 }
 
-                setStatus(status, '正在发送 HTTP 请求...', 'info');
+                setStatus(status, '正在提交 HTTP 请求，请稍候...', 'info');
                 const submitResult = window.Bridge.submitSportsData(currentOutput);
                 const submitResponse = safeParseJson(submitResult, null);
 
                 if (!submitResponse) {
-                    setStatus(status, '服务器响应不是有效 JSON。', 'error');
+                    setStatus(status, '服务器响应不是有效 JSON，请检查返回内容。', 'error');
                     output.value = submitResult || '';
                     return;
                 }
@@ -573,7 +573,7 @@
                     return;
                 }
 
-                setStatus(status, 'HTTP 请求成功！', 'success');
+                setStatus(status, 'HTTP 请求成功！你可以查看下方返回结果确认是否提交成功。', 'success');
                 output.value = JSON.stringify(submitResponse, null, 2);
             });
         }
@@ -581,7 +581,7 @@
         if (clearOutputButton) {
             clearOutputButton.addEventListener('click', function () {
                 output.value = '{}';
-                setStatus(status, '结果已清空。', 'info');
+                setStatus(status, '生成区内容已清空，不影响已保存的 SportId。', 'info');
                 renderSportIdWaitHint();
             });
         }
@@ -604,7 +604,7 @@
             showSportIdSavedStatus('已恢复已保存的 SportId');
         } else {
             renderSportIdWaitHint();
-            setStatus(status, '已登录，可以开始生成 UploadJsonSports。', 'success');
+            setStatus(status, '已登录。先填写信息，再按 3 个步骤依次操作。', 'success');
         }
 
         // 初始化高级设置面板

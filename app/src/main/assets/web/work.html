@@ -18,41 +18,44 @@
                     </div>
                     <button id="logoutButton" class="secondary" type="button">退出登录</button>
                 </div>
-                <p class="muted">请填写学号与姓名；第一步获取或手动填写 SportId 后，前端会持续显示已等待时长供你参考。</p>
-                <div id="workStatus" class="status info">准备就绪，请填写信息后开始操作。</div>
+                <p class="muted">按下面 3 个步骤操作即可：先准备学号、姓名与 SportId，再生成 JSON，最后确认无误后提交。</p>
+                <div id="workStatus" class="status info">准备就绪。先填写信息，再按步骤操作。</div>
             </div>
 
             <div class="card form-card">
                 <label class="field">
                     <span>学号</span>
-                    <input id="studentId" type="text" inputmode="numeric" autocomplete="off" placeholder="例如：2023114514" />
+                    <input id="studentId" type="text" inputmode="numeric" autocomplete="off" placeholder="请输入当前要处理的学号，例如：2023114514" aria-describedby="identityHelp" />
                 </label>
                 <label class="field">
                     <span>姓名</span>
-                    <input id="studentName" type="text" autocomplete="off" placeholder="例如：张三" />
+                    <input id="studentName" type="text" autocomplete="off" placeholder="请输入对应姓名，例如：张三" aria-describedby="identityHelp" />
                 </label>
+                <p id="identityHelp" class="muted">学号和姓名建议保持与当前登录身份一致，方便确认 SportId 是否对应正确。</p>
                 <label class="field">
                     <span>SportId</span>
-                    <input id="sportId" type="text" autocomplete="off" placeholder="可手动输入，获取后会自动保存" />
+                    <input id="sportId" type="text" autocomplete="off" placeholder="可手动填写；如果已获取过，页面会自动帮你保存" aria-describedby="sportIdHelp sportIdWaitHint" />
                 </label>
+                <p id="sportIdHelp" class="muted">如果你已经有可用的 SportId，可以直接粘贴到这里；如果没有，就先点下面的第一步获取。</p>
                 <div id="sportIdWaitHint" class="status info">尚未记录 SportId 时间。</div>
+                <p class="muted">推荐操作顺序：① 获取 / 填写 SportId → ② 生成 UploadJsonSports → ③ 检查后再提交。</p>
                 <div class="actions">
-                    <button id="sportIdButton" class="primary" type="button">第一步、获取 SportId</button>
-                    <button id="generateButton" class="primary" type="button">第二步、生成 UploadJsonSports</button>
-                    <button id="submitButton" class="primary" type="button">第三步、发起 HTTP 请求</button>
-                    <button id="clearOutputButton" class="secondary" type="button">清空结果</button>
+                    <button id="sportIdButton" class="primary" type="button">第一步：获取 SportId</button>
+                    <button id="generateButton" class="primary" type="button">第二步：生成 UploadJsonSports</button>
+                    <button id="submitButton" class="primary" type="button">第三步：提交 HTTP 请求</button>
+                    <button id="clearOutputButton" class="secondary" type="button">清空生成结果</button>
                 </div>
             </div>
 
             <div class="card output-card">
                 <div class="output-header">
-                    <h2>生成结果</h2>
-                    <span class="muted">可编辑 JSON，如果你不了解相关字段的能力，请不要胡乱修改以防被标记为异常</span>
+                    <h2>生成结果（待检查 / 待提交）</h2>
+                    <span class="muted">这里会显示生成后的 JSON。提交前建议重点检查 sportId、时间相关字段，以及是否存在 error 字段。</span>
                 </div>
-                <textarea id="output" class="output-textarea" placeholder="{}">{}</textarea>
+                <textarea id="output" class="output-textarea" placeholder="生成后的 UploadJsonSports 会显示在这里；如需手动调整，请谨慎修改。">{}</textarea>
                 <div class="output-actions">
                     <button id="formatButton" class="secondary" type="button">格式化 JSON</button>
-                    <button id="copyButton" class="secondary" type="button">复制</button>
+                    <button id="copyButton" class="secondary" type="button">复制结果</button>
                 </div>
                 <br><br><br><br><br>
             </div>
@@ -82,17 +85,17 @@
             <div class="card advanced-card">
                 <div class="eyebrow">Advanced</div>
                 <h2>高级设置</h2>
-                <p class="muted">查看和管理当前登录凭据，支持复制或粘贴自定义凭据以切换用户。</p>
+                <p class="muted">查看和管理当前登录凭据；只有在你明确知道用途时，再复制、粘贴或切换凭据。</p>
 
                 <div class="credentials-container">
                     <div class="credentials-field">
                         <label>当前凭据 (JSON)</label>
-                        <textarea id="credentialsOutput" class="credentials-textarea" placeholder="点击下方「刷新凭据」按钮加载凭据"></textarea>
+                        <textarea id="credentialsOutput" class="credentials-textarea" placeholder="点击下方“刷新凭据”后，这里会显示当前 jwt / secret"></textarea>
                         <div class="credentials-actions">
                             <button id="refreshCredsButton" class="secondary" type="button">刷新凭据</button>
-                            <button id="copyCresButton" class="secondary" type="button">复制</button>
+                            <button id="copyCresButton" class="secondary" type="button">复制凭据</button>
                             <button id="pasteCredsButton" class="secondary" type="button">粘贴并应用</button>
-                            <button id="clearCredsButton" class="secondary" type="button">清除</button>
+                            <button id="clearCredsButton" class="secondary" type="button">清除内容</button>
                         </div>
                     </div>
                     <div id="advancedStatus" class="status info" style="margin-top: 16px;">等待操作。</div>
