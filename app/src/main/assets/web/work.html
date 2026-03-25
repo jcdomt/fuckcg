@@ -62,6 +62,30 @@
             </div>
         </section>
 
+        <section id="recordsPanel" class="tab-panel" aria-labelledby="tabRecords" hidden>
+            <div class="card records-card">
+                <div class="eyebrow">Records</div>
+                <h2>运动记录</h2>
+                <p class="muted">查看你的运动数据记录。</p>
+
+                <div class="actions">
+                    <button id="refreshRecordsButton" class="primary" type="button">刷新运动记录</button>
+                    <button id="clearRecordsButton" class="secondary" type="button">清空列表</button>
+                </div>
+
+                <div id="recordsStatus" class="status info">等待操作。</div>
+
+                <div id="recordsSummary" class="records-summary muted">尚未加载记录。</div>
+                <div id="recordsList" class="records-list"></div>
+
+                <!-- 隐藏的配置字段，仅供后端使用 -->
+                <input id="recordsStudentId" type="hidden" />
+                <input id="recordsType" type="hidden" value="0" />
+                <input id="recordsEndpoint" type="hidden" value="/api/l/v7/sportlist" />
+                <textarea id="recordsRawOutput" style="display: none;"></textarea>
+            </div>
+        </section>
+
         <section id="aboutPanel" class="tab-panel" aria-labelledby="tabAbout" hidden>
             <div class="card about-card">
                 <div class="eyebrow">About</div>
@@ -107,10 +131,12 @@
 
     <nav class="tab-bar" aria-label="底部导航">
         <button id="tabWork" class="tab-button is-active" type="button" data-tab-target="workPanel" aria-selected="true">工作台</button>
+        <button id="tabRecords" class="tab-button" type="button" data-tab-target="recordsPanel" aria-selected="false">运动记录</button>
         <button id="tabAbout" class="tab-button" type="button" data-tab-target="aboutPanel" aria-selected="false">关于</button>
         <button id="tabAdvanced" class="tab-button" type="button" data-tab-target="advancedPanel" aria-selected="false">高级设置</button>
     </nav>
 </div>
+<script src="record-detail.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -100,6 +100,243 @@ public class work {
         }
     }
 
+    public static String getSportRecordsJson(Context context, String queryJson) {
+        Context safeContext = context != null ? context : appContext;
+        if (safeContext == null) {
+            return buildErrorJson("context is not initialized");
+        }
+
+        try {
+            login.UserBody userBody = login.loadUserBody(safeContext);
+            if (userBody == null || userBody.jwt == null || userBody.secret == null) {
+                return buildErrorJson("auth credentials are unavailable, please login again");
+            }
+
+            JSONObject query = parseJsonObject(queryJson, new JSONObject());
+            String endpoint = query.optString("endpoint", "/api/l/v7/sportlist").trim();
+            if (endpoint.isEmpty()) {
+                endpoint = "/api/l/v7/sportlist";
+            }
+            if (!endpoint.startsWith("/")) {
+                endpoint = "/" + endpoint;
+            }
+
+            String studentId = query.optString("studentId", "").trim();
+            int type = query.optInt("type", 1);
+
+            JSONObject params = new JSONObject();
+            if (!studentId.isEmpty()) {
+                params.put("xh", studentId);
+            }
+            params.put("type", type);
+
+            String responseText = http.get(endpoint, params, userBody.jwt, userBody.secret);
+            if (responseText == null || responseText.trim().isEmpty()) {
+                return buildErrorJson("request sport records failed: empty response");
+            }
+
+            JSONObject serverJson = parseJsonObject(responseText, null);
+            if (serverJson == null) {
+                JSONObject fallback = new JSONObject();
+                fallback.put("success", false);
+                fallback.put("endpoint", endpoint);
+                fallback.put("items", new JSONArray());
+                fallback.put("error", "response is not JSON");
+                fallback.put("rawText", responseText);
+                return fallback.toString();
+            }
+
+            if (serverJson.optString("error", "").trim().length() > 0) {
+                return serverJson.toString();
+            }
+
+            JSONArray items = extractRecordsArray(serverJson);
+            JSONArray normalizedItems = new JSONArray();
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item != null) {
+                    normalizedItems.put(normalizeRecord(item));
+                }
+            }
+
+            // 按 beginTime 从近到远排序
+            sortRecordsByTime(normalizedItems);
+
+            JSONObject result = new JSONObject();
+            result.put("success", true);
+            result.put("endpoint", endpoint);
+            result.put("total", resolveTotal(serverJson, normalizedItems.length()));
+            result.put("hasMore", resolveHasMore(serverJson, normalizedItems.length()));
+            result.put("items", normalizedItems);
+            return result.toString();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to request sport records", e);
+            return buildErrorJson("request sport records failed: " + e.getMessage());
+        }
+    }
+
+    private static JSONObject normalizeRecord(JSONObject raw) {
+        try {
+            JSONObject normalized = new JSONObject();
+
+            // 关键展示字段
+            normalized.put("recordId", raw.optString("id", ""));
+            normalized.put("beginTime", raw.optString("beginTime", ""));
+            normalized.put("endTime", raw.optString("endTime", ""));
+            normalized.put("activeTime", raw.optString("activeTime", ""));
+            normalized.put("distance", raw.optString("odometer", ""));
+            normalized.put("calorie", raw.optString("calorie", ""));
+            normalized.put("avgSpeed", raw.optString("avgSpeed", ""));
+            normalized.put("avgPace", raw.optString("avgPace", ""));
+            normalized.put("stepCount", raw.optString("stepCount", ""));
+
+            // 状态字段
+            normalized.put("tip", raw.optString("tip", ""));
+            normalized.put("isValid", raw.optString("isValid", ""));
+            normalized.put("checkStatus", raw.optString("checkStatus", ""));
+
+            // 运动路线信息
+            normalized.put("planRouteName", raw.optString("planRouteName", ""));
+            normalized.put("subType", raw.optString("subType", ""));
+
+            return normalized;
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to normalize record", e);
+            try {
+                JSONObject fallback = new JSONObject();
+                fallback.put("recordId", raw.optString("id", ""));
+                fallback.put("error", "normalize failed");
+                return fallback;
+            } catch (Exception ignored) {
+                return new JSONObject();
+            }
+        }
+    }
+
+    private static JSONObject parseJsonObject(String text, JSONObject fallback) {
+        if (text == null || text.trim().isEmpty()) {
+            return fallback;
+        }
+        try {
+            return new JSONObject(text);
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    private static JSONArray extractRecordsArray(JSONObject source) {
+        if (source == null) {
+            return new JSONArray();
+        }
+
+        JSONArray direct = firstNonNullArray(
+                source.optJSONArray("data"),
+                source.optJSONArray("items"),
+                source.optJSONArray("list"),
+                source.optJSONArray("rows"),
+                source.optJSONArray("records")
+        );
+        if (direct != null) {
+            return direct;
+        }
+
+        JSONObject nested = firstNonNullObject(
+                source.optJSONObject("data"),
+                source.optJSONObject("result"),
+                source.optJSONObject("response"),
+                source.optJSONObject("page")
+        );
+        if (nested != null) {
+            JSONArray nestedArray = firstNonNullArray(
+                    nested.optJSONArray("items"),
+                    nested.optJSONArray("list"),
+                    nested.optJSONArray("rows"),
+                    nested.optJSONArray("records"),
+                    nested.optJSONArray("data")
+            );
+            if (nestedArray != null) {
+                return nestedArray;
+            }
+        }
+
+        return new JSONArray();
+    }
+
+    private static int resolveTotal(JSONObject source, int fallbackCount) {
+        if (source == null) {
+            return fallbackCount;
+        }
+
+        int direct = firstPositiveInt(
+                source.optInt("total", -1),
+                source.optInt("count", -1),
+                source.optInt("totalCount", -1)
+        );
+        if (direct >= 0) {
+            return direct;
+        }
+
+        JSONObject nested = firstNonNullObject(
+                source.optJSONObject("data"),
+                source.optJSONObject("result"),
+                source.optJSONObject("page")
+        );
+        if (nested != null) {
+            int nestedTotal = firstPositiveInt(
+                    nested.optInt("total", -1),
+                    nested.optInt("count", -1),
+                    nested.optInt("totalCount", -1)
+            );
+            if (nestedTotal >= 0) {
+                return nestedTotal;
+            }
+        }
+
+        return fallbackCount;
+    }
+
+    private static boolean resolveHasMore(JSONObject source, int currentCount) {
+        if (source != null) {
+            if (source.has("hasMore")) {
+                return source.optBoolean("hasMore", false);
+            }
+            JSONObject nested = firstNonNullObject(
+                    source.optJSONObject("data"),
+                    source.optJSONObject("result"),
+                    source.optJSONObject("page")
+            );
+            if (nested != null && nested.has("hasMore")) {
+                return nested.optBoolean("hasMore", false);
+            }
+        }
+
+        return false;
+    }
+
+    private static JSONArray firstNonNullArray(JSONArray... arrays) {
+        if (arrays == null) {
+            return null;
+        }
+        for (JSONArray array : arrays) {
+            if (array != null) {
+                return array;
+            }
+        }
+        return null;
+    }
+
+    private static int firstPositiveInt(int... values) {
+        if (values == null) {
+            return -1;
+        }
+        for (int value : values) {
+            if (value >= 0) {
+                return value;
+            }
+        }
+        return -1;
+    }
+
     private static String extractSportId(JSONObject json) {
         if (json == null) {
             return "";
@@ -231,5 +468,38 @@ public class work {
         }
         visited.remove(value);
         return object;
+    }
+
+    private static void sortRecordsByTime(JSONArray items) {
+        if (items == null || items.length() <= 1) {
+            return;
+        }
+
+        // 使用冒泡排序，按 beginTime 从新到旧排序
+        for (int i = 0; i < items.length(); i++) {
+            for (int j = 0; j < items.length() - i - 1; j++) {
+                JSONObject curr = items.optJSONObject(j);
+                JSONObject next = items.optJSONObject(j + 1);
+
+                if (curr == null || next == null) {
+                    continue;
+                }
+
+                String currTime = curr.optString("beginTime", "");
+                String nextTime = next.optString("beginTime", "");
+
+                // 比较时间戳字符串，从新到旧（降序）
+                // "2026-03-25 13:07:57" > "2026-03-22 14:17:19" 时需要交换
+                if (currTime.compareTo(nextTime) < 0) {
+                    // 交换两个元素
+                    try {
+                        items.put(j, next);
+                        items.put(j + 1, curr);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to swap records during sort", e);
+                    }
+                }
+            }
+        }
     }
 }

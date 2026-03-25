@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>运动记录详情</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body data-page="record-detail">
+<div class="page page-detail">
+    <div class="page-detail-container">
+        <div class="detail-header">
+            <button id="detailBackButton" class="back-button" type="button">← 返回</button>
+            <h1>运动记录详情</h1>
+            <div style="width: 48px;"></div>
+        </div>
+
+        <div id="detailStatus" class="status info" style="margin: 16px;">等待加载...</div>
+
+        <div id="detailContent" class="detail-content">
+            <!-- 动态生成内容 -->
+        </div>
+    </div>
+</div>
+
+<script src="record-detail.js"></script>
+<script>
+// 从 URL 参数或 sessionStorage 获取运动记录数据
+function loadRecordDetail() {
+    const status = document.getElementById('detailStatus');
+    const content = document.getElementById('detailContent');
+
+    // 尝试从 sessionStorage 获取记录数据
+    const recordJson = sessionStorage.getItem('currentRecord');
+    if (!recordJson) {
+        status.textContent = '未找到运动记录数据';
+        status.className = 'status error';
+        return;
+    }
+
+    try {
+        const record = JSON.parse(recordJson);
+        renderRecordDetail(record);
+        status.style.display = 'none';
+    } catch (error) {
+        status.textContent = '数据加载失败：' + error.message;
+        status.className = 'status error';
+    }
+}
+
+function renderRecordDetail(record) {
+    const content = document.getElementById('detailContent');
+
+    // 时间信息卡片
+    const timeCard = createDetailCard('时间信息', [
+        { label: '开始时间', value: record.beginTime || '-' },
+        { label: '结束时间', value: record.endTime || '-' },
+        { label: '活动时长', value: record.activeTime || '-' },
+    ]);
+
+    // 运动数据卡片
+    const dataCard = createDetailCard('运动数据', [
+        { label: '距离', value: record.distance ? record.distance + ' km' : '-' },
+        { label: '平均速度', value: record.avgSpeed ? record.avgSpeed + ' km/h' : '-' },
+        { label: '平均配速', value: record.avgPace || '-' },
+        { label: '步数', value: record.stepCount ? record.stepCount + ' 步' : '-' },
+        { label: '卡路里', value: record.calorie ? record.calorie + ' kcal' : '-' },
+    ]);
+
+    // 状态信息卡片
+    const statusValue = record.isValid === '1' ? '有效 ✓' : (record.checkStatus === '1' ? '待审核' : '无效 ✗');
+    const statusCard = createDetailCard('审核状态', [
+        { label: '有效性', value: statusValue },
+        { label: '审核状态', value: record.checkStatus || '-' },
+        { label: '提示信息', value: record.tip || '无' },
+    ]);
+
+    // 路线信息卡片
+    const routeCard = createDetailCard('路线信息', [
+        { label: '运动路线', value: record.planRouteName || '-' },
+        { label: '运动类型', value: record.subType || '-' },
+        { label: '记录ID', value: record.recordId || '-' },
+    ]);
+
+    content.innerHTML = '';
+    content.appendChild(timeCard);
+    content.appendChild(dataCard);
+    content.appendChild(statusCard);
+    content.appendChild(routeCard);
+}
+
+function createDetailCard(title, fields) {
+    const card = document.createElement('div');
+    card.className = 'detail-card';
+
+    let html = '<h2>' + title + '</h2>';
+    html += '<div class="detail-fields">';
+
+    fields.forEach(function(field) {
+        html += '<div class="detail-field">' +
+                '<span class="detail-label">' + field.label + '</span>' +
+                '<span class="detail-value">' + field.value + '</span>' +
+                '</div>';
+    });
+
+    html += '</div>';
+    card.innerHTML = html;
+    return card;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const backButton = document.getElementById('detailBackButton');
+    if (backButton) {
+        backButton.addEventListener('click', function() {
+            if (window.RecordDetailModule && typeof window.RecordDetailModule.closeDetail === 'function') {
+                window.RecordDetailModule.closeDetail();
+                return;
+            }
+            sessionStorage.removeItem('currentRecord');
+            window.location.href = 'work.html#recordsPanel';
+        });
+    }
+
+    loadRecordDetail();
+});
+</script>
+</body>
+</html>
+

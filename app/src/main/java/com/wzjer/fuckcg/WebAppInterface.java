@@ -36,6 +36,8 @@ public class WebAppInterface {
             buildUploadJsonSports("", "");
             requestSportId("", "");
             submitSportsData("{}");
+            getSportRecords("{}");
+            getSportRecordsAsync("{}", "req_0");
             applyCredentials("{}");
         }
     }
@@ -226,6 +228,27 @@ public class WebAppInterface {
             android.util.Log.e("WebAppInterface", "submitSportsData failed", e);
             return "{\"error\":\"" + e.getMessage() + "\"}";
         }
+    }
+
+    //noinspection unused
+    @SuppressWarnings("unused")
+    @JavascriptInterface
+    public String getSportRecords(String queryJson) {
+        return work.getSportRecordsJson(mContext, queryJson);
+    }
+
+    @JavascriptInterface
+    public void getSportRecordsAsync(String queryJson, String requestId) {
+        final String safeRequestId = requestId == null ? "" : requestId;
+        new Thread(() -> {
+            String result = work.getSportRecordsJson(mContext, queryJson);
+            if (webView == null) {
+                return;
+            }
+            String script = "window.onSportRecordsResult && window.onSportRecordsResult(" +
+                    JSONObject.quote(safeRequestId) + "," + JSONObject.quote(result) + ")";
+            webView.post(() -> webView.evaluateJavascript(script, null));
+        }).start();
     }
 
     //noinspection unused

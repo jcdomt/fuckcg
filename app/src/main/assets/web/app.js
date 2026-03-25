@@ -150,7 +150,7 @@
         refresh();
     }
 
-    function initWorkTabs() {
+    function initWorkTabs(onTabChanged) {
         const tabButtons = Array.prototype.slice.call(document.querySelectorAll('.tab-button'));
         const tabPanels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel'));
 
@@ -170,6 +170,10 @@
                 panel.classList.toggle('is-active', active);
                 panel.hidden = !active;
             });
+
+            if (typeof onTabChanged === 'function') {
+                onTabChanged(targetId);
+            }
         }
 
         tabButtons.forEach(function (button) {
@@ -182,7 +186,262 @@
             });
         });
 
-        setActiveTab('workPanel');
+        const hashTarget = (location.hash || '').replace('#', '').trim();
+        const isValidHashTarget = tabPanels.some(function (panel) {
+            return panel.id === hashTarget;
+        });
+        setActiveTab(isValidHashTarget ? hashTarget : 'workPanel');
+    }
+
+    function initRecordsPanel() {
+        const status = document.getElementById('recordsStatus');
+        const summary = document.getElementById('recordsSummary');
+        const list = document.getElementById('recordsList');
+        const refreshButton = document.getElementById('refreshRecordsButton');
+        const clearButton = document.getElementById('clearRecordsButton');
+        const workStudentIdInput = document.getElementById('studentId');
+        const hiddenStudentIdInput = document.getElementById('recordsStudentId');
+        const endpointInput = document.getElementById('recordsEndpoint');
+
+        const RECORDS_CACHE_KEY = 'cg.recordsCache';
+        const REAL_VALID_TIP = '有效，纳入考核的评分里程0.0KM,评分次数1次';
+        let hasLoadedOnce = false;
+        let requestSeq = 0;
+
+        function setRecordsStatus(text, type) {
+            setStatus(status, text, type || 'info');
+        }
+
+        function readQuery() {
+            const studentId = (
+                (workStudentIdInput && workStudentIdInput.value) ||
+                (hiddenStudentIdInput && hiddenStudentIdInput.value) ||
+                ''
+            ).trim();
+            return {
+                endpoint: (endpointInput && endpointInput.value || '').trim() || '/api/l/v7/sportlist',
+                studentId: studentId,
+                type: 1
+            };
+        }
+
+        function loadRecordsCache() {
+            const raw = sessionStorage.getItem(RECORDS_CACHE_KEY);
+            if (!raw) {
+                return null;
+            }
+            const parsed = safeParseJson(raw, null);
+            if (!parsed || !Array.isArray(parsed.items)) {
+                return null;
+            }
+            return parsed;
+        }
+
+        function saveRecordsCache(result) {
+            try {
+                sessionStorage.setItem(RECORDS_CACHE_KEY, JSON.stringify({
+                    total: result.total,
+                    hasMore: result.hasMore,
+                    items: Array.isArray(result.items) ? result.items : []
+                }));
+            } catch (error) {
+                // ignore cache failure
+            }
+        }
+
+        function stringifyRecord(record) {
+            if (!record || typeof record !== 'object') {
+                return String(record || '');
+            }
+            return JSON.stringify(record, null, 2);
+        }
+
+        function firstNonEmpty(record, keys, fallback) {
+            if (!record || typeof record !== 'object') {
+                return fallback || '';
+            }
+            for (let i = 0; i < keys.length; i += 1) {
+                const value = record[keys[i]];
+                if (value !== null && value !== undefined && String(value).trim() !== '') {
+                    return String(value);
+                }
+            }
+            return fallback || '';
+        }
+
+        function renderRecords(items) {
+            if (!list) {
+                return;
+            }
+            list.innerHTML = '';
+
+            if (!Array.isArray(items) || !items.length) {
+                list.innerHTML = '<div class="record-item"><div class="record-item-meta">当前没有可展示的记录。</div></div>';
+                return;
+            }
+
+            items.forEach(function (item, index) {
+                // 提取关键字段
+                const beginTime = item.beginTime ? item.beginTime.substring(5, 16) : '-';  // 取 MM-DD HH:MM
+                const endTime = item.endTime ? item.endTime.substring(5, 16) : '-';
+                const duration = item.activeTime || '-';
+                const distance = item.distance ? item.distance + ' km' : '-';
+                const avgSpeed = item.avgSpeed ? item.avgSpeed + ' km/h' : '-';
+                const avgPace = item.avgPace || '-';
+                const stepCount = item.stepCount ? item.stepCount + ' 步' : '-';
+                var status = item.isValid === '1' ? '有效' : (item.checkStatus === '1' ? '待审核' : '无效');
+                var statusClass = item.isValid === '1' ? 'valid' : (item.checkStatus === '1' ? 'pending' : 'invalid');
+                const tip = item.tip || '-';
+
+                if (item.tip === '提交成功，待审核') {
+                    status = '待审核';
+                    statusClass = 'pending';
+                }
+                if (item.tip === REAL_VALID_TIP) {
+                    status = '真实有效';
+                    statusClass = 'valid';
+                }
+
+                const card = document.createElement('div');
+                card.className = 'record-item record-item-clickable';
+                card.style.cursor = 'pointer';
+                card.innerHTML =
+                    '<div class="record-item-header">' +
+                    '<div class="record-item-time">' + beginTime + ' ~ ' + endTime + '</div>' +
+                    '<div class="record-item-status ' + statusClass + '">' + status + '</div>' +
+                    '</div>' +
+                    '<div class="record-item-main">' +
+                    '<div class="record-item-stat"><span class="label">距离:</span> <span class="value">' + distance + '</span></div>' +
+                    '<div class="record-item-stat"><span class="label">时长:</span> <span class="value">' + duration + '</span></div>' +
+                    '<div class="record-item-stat"><span class="label">速度:</span> <span class="value">' + avgSpeed + '</span></div>' +
+                    '<div class="record-item-stat"><span class="label">配速:</span> <span class="value">' + avgPace + '</span></div>' +
+                    '<div class="record-item-stat"><span class="label">步数:</span> <span class="value">' + stepCount + '</span></div>' +
+                    '</div>' +
+                    '<div class="record-item-tip">' + tip + '</div>';
+
+                // 添加点击事件打开详情页面
+                card.addEventListener('click', function() {
+                    if (window.RecordDetailModule) {
+                        window.RecordDetailModule.openDetail(item);
+                    }
+                });
+
+                list.appendChild(card);
+            });
+        }
+
+        function renderSummary(result, count) {
+            if (!summary) {
+                return;
+            }
+            const total = result && result.total != null ? result.total : '未知';
+            const hasMore = result && result.hasMore ? '是' : '否';
+            const items = result && Array.isArray(result.items) ? result.items : [];
+            const realValidCount = items.filter(function (item) {
+                return item && item.tip === REAL_VALID_TIP;
+            }).length;
+            summary.textContent = '已加载 ' + count + ' 条记录；真实有效 ' + realValidCount + ' 次；总数 ' + total + '；是否还有更多：' + hasMore + '。';
+        }
+
+        function requestSportRecordsAsync(query) {
+            if (hasBridgeMethod('getSportRecordsAsync')) {
+                return new Promise(function (resolve, reject) {
+                    const requestId = 'records_' + Date.now() + '_' + (++requestSeq);
+                    const timeoutId = window.setTimeout(function () {
+                        reject(new Error('请求超时，请稍后重试'));
+                    }, 30000);
+
+                    window.onSportRecordsResult = function (callbackRequestId, raw) {
+                        if (callbackRequestId !== requestId) {
+                            return;
+                        }
+                        window.clearTimeout(timeoutId);
+                        resolve(raw || '');
+                    };
+
+                    try {
+                        window.Bridge.getSportRecordsAsync(JSON.stringify(query), requestId);
+                    } catch (error) {
+                        window.clearTimeout(timeoutId);
+                        reject(error);
+                    }
+                });
+            }
+
+            if (hasBridgeMethod('getSportRecords')) {
+                return Promise.resolve(window.Bridge.getSportRecords(JSON.stringify(query)));
+            }
+
+            return Promise.reject(new Error('当前环境不支持运动记录查询接口。'));
+        }
+
+        function fetchRecords() {
+            const query = readQuery();
+            if (!hasBridgeMethod('getSportRecords') && !hasBridgeMethod('getSportRecordsAsync')) {
+                setRecordsStatus('当前环境不支持运动记录查询接口。', 'error');
+                return;
+            }
+
+            setRecordsStatus('正在查询运动记录，请稍候...', 'info');
+            refreshButton && (refreshButton.disabled = true);
+
+            requestSportRecordsAsync(query).then(function (raw) {
+                const result = safeParseJson(raw, null);
+                if (!result) {
+                    throw new Error('Java 侧返回不是有效 JSON');
+                }
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+
+                const items = Array.isArray(result.items) ? result.items : [];
+                renderRecords(items);
+                renderSummary(result, items.length);
+                saveRecordsCache(result);
+                setRecordsStatus('记录加载完成。', 'success');
+                hasLoadedOnce = true;
+            }).catch(function (error) {
+                renderRecords([]);
+                renderSummary({}, 0);
+                setRecordsStatus('查询失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+            }).finally(function () {
+                refreshButton && (refreshButton.disabled = false);
+            });
+        }
+
+        if (refreshButton) {
+            refreshButton.addEventListener('click', fetchRecords);
+        }
+
+        if (clearButton) {
+            clearButton.addEventListener('click', function () {
+                sessionStorage.removeItem(RECORDS_CACHE_KEY);
+                renderRecords([]);
+                if (summary) {
+                    summary.textContent = '记录已清空。';
+                }
+                setRecordsStatus('已清空当前展示结果。', 'info');
+            });
+        }
+
+        renderRecords([]);
+
+        const cached = loadRecordsCache();
+        if (cached) {
+            renderRecords(cached.items);
+            renderSummary(cached, cached.items.length);
+            setRecordsStatus('已恢复上次加载结果，点击“刷新运动记录”可手动更新。', 'info');
+            hasLoadedOnce = true;
+        }
+
+        return {
+            ensureLoaded: function () {
+                if (!hasLoadedOnce) {
+                    fetchRecords();
+                }
+            },
+            refresh: fetchRecords
+        };
     }
 
     function initWorkPage() {
@@ -204,7 +463,12 @@
             return;
         }
 
-        initWorkTabs();
+        const recordsPanel = initRecordsPanel();
+        initWorkTabs(function (targetId) {
+            if (targetId === 'recordsPanel' && recordsPanel) {
+                recordsPanel.ensureLoaded();
+            }
+        });
 
         const draft = readFormDraft();
         if (studentIdInput) {
