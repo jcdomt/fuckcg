@@ -88,6 +88,7 @@
     function initLoginPage() {
         const status = document.getElementById('loginStatus');
         const loginButton = document.getElementById('loginButton');
+        const dualLoginButton = document.getElementById('dualLoginButton');
         const refreshStatusButton = document.getElementById('refreshStatusButton');
 
         function refresh() {
@@ -117,9 +118,34 @@
             });
         }
 
+        if (dualLoginButton) {
+            dualLoginButton.addEventListener('click', function () {
+                if (!hasBridgeMethod('performDualLogin')) {
+                    setStatus(status, '当前环境不支持同时登录功能。', 'error');
+                    return;
+                }
+                setStatus(status, '正在从官方应用读取登录信息...', 'info');
+                window.Bridge.performDualLogin();
+            });
+        }
+
         if (refreshStatusButton) {
             refreshStatusButton.addEventListener('click', refresh);
         }
+
+        // 定义回调函数用于双重登录结果处理
+        window.onDualLoginSuccess = function(success) {
+            if (success) {
+                setStatus(status, '同时登录成功！正在进入工作页...', 'success');
+                setTimeout(function() {
+                    redirect(WORK_PAGE);
+                }, 1500);
+            }
+        };
+
+        window.onDualLoginError = function(errorMessage) {
+            setStatus(status, '同时登录失败: ' + (errorMessage || '未知错误'), 'error');
+        };
 
         refresh();
     }

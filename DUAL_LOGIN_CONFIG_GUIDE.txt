@@ -1,0 +1,124 @@
+## 双重登录功能 - 必须配置指南
+
+### ⚠️ 最重要的一步
+
+打开文件: `app/src/main/java/com/wzjer/fuckcg/DualLoginManager.java`
+
+找到第23行:
+```java
+private static final String OFFICIAL_APP_PACKAGE = "com.cg.cgapp";
+```
+
+**修改为你的官方应用包名**:
+```java
+private static final String OFFICIAL_APP_PACKAGE = "你的官方应用包名";
+```
+
+---
+
+### 如何获取官方应用包名
+
+#### 方法1: 使用adb命令
+```bash
+adb shell pm list packages | grep "官方"
+# 或搜索特定关键字
+adb shell pm list packages | grep "cgapp"
+```
+
+#### 方法2: 在Android设备上查看
+1. 打开 设置
+2. 应用 > 应用管理
+3. 找到官方应用
+4. 点击进入详情页
+5. 查看包名信息
+
+#### 方法3: 使用Android Studio
+1. Device Manager > 打开cmd
+2. 输入命令: `pm list packages`
+3. 查找官方应用包名
+
+---
+
+### 修改后的效果
+
+修改完包名后，当用户点击"和官方版同时登录"按钮时：
+
+1. ✅ 系统会检查设备是否ROOT
+2. ✅ ROOT权限正常后，读取你配置的官方应用数据
+3. ✅ 自动从官方应用的SharedPreferences获取JWT
+4. ✅ 同步到本应用并自动登录
+5. ✅ 跳转到工作页面
+
+---
+
+### 常见的官方应用包名格式
+
+- `com.cg.cgapp` - 运动会应用
+- `com.njtech.cgapp` - NJTECH相关应用
+- `com.sports.app` - 通用体育应用
+- 等等...
+
+根据你的实际官方应用确定。
+
+---
+
+### 验证配置是否正确
+
+修改后，重新编译测试:
+
+```bash
+# 1. 编译
+cd D:\work\android\fuckcg
+.\gradlew.bat assembleDebug
+
+# 2. 安装
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# 3. 查看日志
+adb logcat | grep DualLoginManager
+
+# 4. 在应用中测试
+# 如果日志显示 "Successfully read LoginPrefs.xml"
+# 说明包名配置正确！
+```
+
+---
+
+### 其他可能需要修改的地方
+
+如果官方应用的SharedPreferences结构与我们的代码不符，可能需要调整:
+
+**常见的SharedPreferences文件名** (第81-87行):
+```java
+String[] commonPrefFiles = {
+    "login.xml",           // 修改这些文件名
+    "auth.xml",
+    "login_prefs.xml",
+    "auth_prefs.xml",
+    "LoginPrefs.xml"
+};
+```
+
+**常见的字段名** (第106-107行):
+```java
+String jwt = extractStringValue(xmlContent, "jwt");      // 修改字段名
+String secret = extractStringValue(xmlContent, "secret");
+```
+
+---
+
+### 获取官方应用的数据结构
+
+在ROOT设备上运行:
+```bash
+adb shell
+su
+cat /data/data/你的官方应用包名/shared_prefs/LoginPrefs.xml
+```
+
+查看输出，看Token存储在哪个字段和文件。
+
+---
+
+**准备好了吗？修改包名后重新编译测试！**
+

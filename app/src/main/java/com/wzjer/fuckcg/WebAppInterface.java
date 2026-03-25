@@ -31,6 +31,7 @@ public class WebAppInterface {
             getCookies();
             getJSessionId();
             startOAuthPage();
+            performDualLogin();
             logout();
             buildUploadJsonSports("", "");
             requestSportId("", "");
@@ -143,6 +144,52 @@ public class WebAppInterface {
         android.util.Log.d("WebAppInterface", "startOAuthPage() called from JavaScript");
         String jsessionId = login.startOAuthPage();
         return jsessionId == null ? "" : jsessionId;
+    }
+
+    /**
+     * Perform dual login with official app (requires ROOT)
+     * Can be called from JavaScript as: Bridge.performDualLogin()
+     * This will try to read login info from the official app and sync to current app
+     */
+    //noinspection unused
+    @SuppressWarnings("unused")
+    @JavascriptInterface
+    public void performDualLogin() {
+        android.util.Log.d("WebAppInterface", "performDualLogin() called from JavaScript");
+
+        DualLoginManager manager = new DualLoginManager(mContext);
+        manager.performDualLogin(new DualLoginManager.LoginCallback() {
+            @Override
+            public void onSuccess(login.UserBody userBody) {
+                android.util.Log.d("WebAppInterface", "DualLogin success");
+                if (webView != null) {
+                    webView.post(() -> {
+                        if (webView != null) {
+                            webView.evaluateJavascript(
+                                "javascript:window.onDualLoginSuccess && window.onDualLoginSuccess(true)",
+                                null
+                            );
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onError(String errorMessage) {
+                android.util.Log.e("WebAppInterface", "DualLogin error: " + errorMessage);
+                if (webView != null) {
+                    webView.post(() -> {
+                        if (webView != null) {
+                            String escapedError = errorMessage.replace("'", "\\'").replace("\"", "\\\"");
+                            webView.evaluateJavascript(
+                                "javascript:window.onDualLoginError && window.onDualLoginError('" + escapedError + "')",
+                                null
+                            );
+                        }
+                    });
+                }
+            }
+        });
     }
 
     //noinspection unused
