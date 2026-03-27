@@ -18,6 +18,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 // 创建虚假运动数据的核心类
 public class fake {
@@ -153,7 +154,7 @@ public class fake {
             uploadJsonSports.needPassPointCount = "5";
             uploadJsonSports.odometer = format2(odometer);
             uploadJsonSports.pace = sportBean.paceStr;
-            uploadJsonSports.phoneVersion = "2210132C,34,14|2.9.5"; // 感谢 小米13Pro 在本次破解中的大力支持
+            uploadJsonSports.phoneVersion = "Android,31,13|2.9.5"; // 感谢 小米13Pro 在本次破解中的大力支持
             uploadJsonSports.planRouteName = "校内定向线路";
             uploadJsonSports.routeId = "81";
             uploadJsonSports.routePolylineBh = "14756949";
@@ -182,6 +183,20 @@ public class fake {
             return "0" + intValue;
         }
         return String.valueOf(intValue);
+    }
+
+    // Keep generated values near baseline while avoiding implausible outliers.
+    private static double jitter(double base, double ratio) {
+        double factor = 1.0 + (ThreadLocalRandom.current().nextDouble(-1.0, 1.0) * ratio);
+        return base * factor;
+    }
+
+    private static int jitterInt(int base, double ratio) {
+        return (int) Math.max(0, Math.round(jitter(base, ratio)));
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static List<SportLatLngBean> generateFakeRouteData(Context context, long beginTimestamp, double minutes) {
@@ -214,17 +229,25 @@ public class fake {
                 }
 
                 SportLatLngBean bean = new SportLatLngBean();
-                bean.a = obj.optDouble("a", 0.0);
-                bean.o = obj.optDouble("o", 0.0);
-                bean.ac = obj.optDouble("ac", 0.0);
-                bean.d = obj.optDouble("d", 0.0);
-                bean.s = obj.optDouble("s", 0.0);
-                bean.st = obj.optInt("st", 0);
-                bean.sta = obj.optInt("sta", 0);
+
+                // Add meter-level coordinate jitter so each run is close to example.json but not identical.
+                double rawLat = obj.optDouble("a", 0.0);
+                double rawLng = obj.optDouble("o", 0.0);
+                double latJitter = ThreadLocalRandom.current().nextDouble(-0.00003, 0.00003);
+                double lngJitter = ThreadLocalRandom.current().nextDouble(-0.00003, 0.00003);
+                bean.a = rawLat + latJitter;
+                bean.o = rawLng + lngJitter;
+
+                // Lightly vary telemetry around baseline values.
+                bean.ac = Math.max(0.0, jitter(obj.optDouble("ac", 0.0), 0.15));
+                bean.d = Math.max(0.0, jitter(obj.optDouble("d", 0.0), 0.08));
+                bean.s = clamp(Math.max(0.0, jitter(obj.optDouble("s", 0.0), 0.10)), 0.0, 15.0);
+                bean.st = jitterInt(obj.optInt("st", 0), 0.08);
+                bean.sta = jitterInt(obj.optInt("sta", 0), 0.05);
                 bean.v = obj.optInt("v", 1);
 
                 totalDistance += bean.d;
-                bean.da = obj.has("da") ? obj.optDouble("da", totalDistance) : totalDistance;
+                bean.da = totalDistance;
 
                 // 轨迹起始时间与本次运动对齐，点间隔保持 2 秒。
                 bean.t = ts;
