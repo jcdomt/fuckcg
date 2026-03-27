@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
@@ -28,6 +29,7 @@ import okhttp3.Response;
 
 public class http {
     private static final String BASE_URL = "https://ggtypt.njtech.edu.cn/cgapp-server";
+
 
     static String executeSignedRequest(String url, String sign, String timestamp, String v1, String imei, String ua, String cli, String cgAuthorization, RequestBody body, String signSource) {
         OkHttpClient client = new OkHttpClient();
@@ -131,9 +133,9 @@ public class http {
             return "{\"error\":\"encrypt failed, abort get\"}";
         }
 
-        String imei = "ffffffff-cce7-2bea-cce7-2bea00000000";
+        String imei = generateImei();
         String v1 = md5(String.valueOf(System.currentTimeMillis()));
-        String ua = "cgapp/2.9.6 (Linux; Android 16; Xiaomi/BP2A.250605.031.A3)";
+        String ua = generateUserAgent();
         String clientJson = "{\"root\":0,\"heap\":1,\"t\":" + System.currentTimeMillis() + "}";
         String aesKey = fixedAesKey(secret);
         if (aesKey == null) {
@@ -226,9 +228,9 @@ public class http {
             return "{\"error\":\"encrypt failed, abort post\"}";
         }
 
-        String imei = "ffffffff-cce7-2bea-cce7-2bea00000000";
+        String imei = generateImei();
         String v1 = md5(String.valueOf(System.currentTimeMillis()));
-        String ua = "cgapp/2.9.6 (Linux; Android 16; Xiaomi/BP2A.250605.031.A3)";
+        String ua = generateUserAgent();
         String clientJson = "{\"root\":0,\"heap\":1,\"t\":" + System.currentTimeMillis() + "}";
         String aesKey = fixedAesKey(secret);
         if (aesKey == null) {
@@ -369,5 +371,65 @@ public class http {
             Log.e("http", "postSportsData failed: " + e.getMessage(), e);
             return "{\"error\":\"" + e.getMessage() + "\"}";
         }
+    }
+
+    private static String generateImei() {
+        // 生成一个固定格式的IMEI，实际应用中可以根据需要生成不同的值
+        return "ffffffff-cce7-2bea-cce7-2bea00000000";
+    }
+
+    private static String randomFrom(String[] values) {
+        if (values == null || values.length == 0) {
+            return "";
+        }
+        int idx = ThreadLocalRandom.current().nextInt(values.length);
+        return values[idx];
+    }
+
+    private static String randomBuildId() {
+        ThreadLocalRandom r = ThreadLocalRandom.current();
+        char c1 = (char) ('A' + r.nextInt(26));
+        char c2 = (char) ('A' + r.nextInt(26));
+        int d1 = r.nextInt(10);
+        char c3 = (char) ('A' + r.nextInt(26));
+        int yymmdd = 240000 + r.nextInt(300000);
+        int patch = 100 + r.nextInt(900);
+        int branch = 1 + r.nextInt(4);
+        return "" + c1 + c2 + d1 + c3 + "." + yymmdd + "." + patch + ".A" + branch;
+    }
+
+    private static boolean isSafeHeaderAscii(String value) {
+        if (value == null || value.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c < 32 || c > 126) {
+                return false;
+            }
+        }
+        return true;
+    }
+    private static final String UA_FALLBACK = "cgapp/2.9.6 (Linux; Android 16; Xiaomi/BP2A.250605.031.A3)";
+    private static final String[] UA_APP_VERSIONS = {
+            "2.9.5", "2.9.6"
+    };
+    private static final String[] UA_ANDROID_VERSIONS = {
+            "12", "13", "14", "15", "16"
+    };
+    private static final String[] UA_BRANDS = {
+            "Xiaomi", "Redmi", "OnePlus", "OPPO", "vivo", "HUAWEI", "samsung"
+    };
+    private static String generateUserAgent() {
+        String appVersion = randomFrom(UA_APP_VERSIONS);
+        String androidVersion = randomFrom(UA_ANDROID_VERSIONS);
+        String brand = randomFrom(UA_BRANDS);
+        String buildId = randomBuildId();
+
+        String ua = "cgapp/" + appVersion + " (Linux; Android " + androidVersion + "; " + brand + "/" + buildId + ")";
+        if (!isSafeHeaderAscii(ua) || ua.length() > 128) {
+            return UA_FALLBACK;
+        }
+        return ua;
     }
 }
