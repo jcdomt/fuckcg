@@ -1,6 +1,8 @@
 package com.wzjer.fuckcg;
 
+import android.content.Context;
 import android.net.Uri;
+import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 
@@ -103,6 +105,10 @@ public class http {
     }
 
     public static String get(String url, JSONObject data, String jwt, String secret) {
+        return get(null, url, data, jwt, secret, null);
+    }
+
+    public static String get(Context context, String url, JSONObject data, String jwt, String secret, String studentIdOverride) {
         if (url == null || url.trim().isEmpty()) {
             return "{\"error\":\"empty url\"}";
         }
@@ -133,7 +139,12 @@ public class http {
             return "{\"error\":\"encrypt failed, abort get\"}";
         }
 
-        String imei = generateImei();
+        String studentId = safeStudentId(studentIdOverride);
+        if (studentId.isEmpty() && data != null) {
+            studentId = safeStudentId(data.optString("xh", ""));
+        }
+
+        String imei = generateImei(context, studentId, jwt);
         String v1 = md5(String.valueOf(System.currentTimeMillis()));
         String ua = generateUserAgent();
         String clientJson = "{\"root\":0,\"heap\":1,\"t\":" + System.currentTimeMillis() + "}";
@@ -194,6 +205,10 @@ public class http {
     }
 
     public static String post(String url, JSONObject data, String jwt, String secret) {
+        return post(null, url, data, jwt, secret, null);
+    }
+
+    public static String post(Context context, String url, JSONObject data, String jwt, String secret, String studentIdOverride) {
         if (url == null || url.trim().isEmpty()) {
             return "{\"error\":\"empty url\"}";
         }
@@ -228,7 +243,12 @@ public class http {
             return "{\"error\":\"encrypt failed, abort post\"}";
         }
 
-        String imei = generateImei();
+        String studentId = safeStudentId(studentIdOverride);
+        if (studentId.isEmpty() && data != null) {
+            studentId = safeStudentId(data.optString("xh", ""));
+        }
+
+        String imei = generateImei(context, studentId, jwt);
         String v1 = md5(String.valueOf(System.currentTimeMillis()));
         String ua = generateUserAgent();
         String clientJson = "{\"root\":0,\"heap\":1,\"t\":" + System.currentTimeMillis() + "}";
@@ -338,18 +358,20 @@ public class http {
             }
 
             JSONObject dataObj = new JSONObject();
+            String studentId = "";
             try {
                 String aesKey = fixedAesKey(userBody.secret);
                 if (aesKey == null) {
                     return "{\"error\":\"invalid secret\"}";
                 }
+                studentId = extractStudentIdFromSportsJson(jsonData);
                 dataObj.put("jsonsports", aes(jsonData, aesKey));
             } catch (JSONException e) {
                 Log.e("http", "Failed to construct data object: " + e.getMessage(), e);
                 return "{\"error\":\"Failed to construct data object: " + e.getMessage() + "\"}";
             }
 
-            String responseText = post(url, dataObj, userBody.jwt, userBody.secret);
+            String responseText = post(context, url, dataObj, userBody.jwt, userBody.secret, studentId);
             if (responseText.trim().isEmpty()) {
                 return "{\"error\":\"empty response\"}";
             }
@@ -374,8 +396,89 @@ public class http {
     }
 
     private static String generateImei() {
-        // 生成一个固定格式的IMEI，实际应用中可以根据需要生成不同的值
+        return generateImei(null, null, null);
+    }
+
+    private static String generateImei(Context context, String studentId, String jwt) {
+        String androidId = getAndroidId(context);
+        String officialLikeImei = buildOfficialLikeImei(androidId);
+
+        String normalizedStudentId = safeStudentId(studentId);
+        String sessionSeed = resolveLoginCycleSeed(context, jwt);
+
+        // Bind to account + login cycle while staying deterministic for that cycle.
+        String seed = officialLikeImei + "|" + normalizedStudentId + "|" + sessionSeed;
+        String digest = md5(seed);
+        if (digest != null && digest.length() >= 32) {
+            String uuidLike = digest.substring(0, 8) + "-"
+                    + digest.substring(8, 12) + "-"
+                    + digest.substring(12, 16) + "-"
+                    + digest.substring(16, 20) + "-"
+                    + digest.substring(20, 32);
+            if (!uuidLike.isEmpty()) {
+                return uuidLike;
+            }
+        }
+
+        if (officialLikeImei != null && !officialLikeImei.isEmpty()) {
+            return officialLikeImei;
+        }
         return "ffffffff-cce7-2bea-cce7-2bea00000000";
+    }
+
+    private static String getAndroidId(Context context) {
+        if (context == null) {
+            return "";
+        }
+        try {
+            String value = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+            return value == null ? "" : value;
+        } catch (Exception e) {
+            Log.w("http", "Failed to read android_id", e);
+            return "";
+        }
+    }
+
+    private static String buildOfficialLikeImei(String androidId) {
+        if (androidId == null || androidId.trim().isEmpty()) {
+            return "";
+        }
+
+        // Centered on the official mechanism: UUID(hash(android_id), hash(android_id)<<32).
+        int hash = androidId.hashCode();
+        long msb = hash;
+        long lsb = ((long) hash) << 32;
+        return new java.util.UUID(msb, lsb).toString();
+    }
+
+    private static String resolveLoginCycleSeed(Context context, String jwt) {
+        if (context != null) {
+            try {
+                String jsessionId = new Modules.LoginPrefs(context).getSavedJSessionId();
+                if (jsessionId != null && !jsessionId.trim().isEmpty()) {
+                    return jsessionId.trim();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return (jwt == null || jwt.trim().isEmpty()) ? "no-session" : jwt.trim();
+    }
+
+    private static String safeStudentId(String studentId) {
+        return studentId == null ? "" : studentId.trim();
+    }
+
+    private static String extractStudentIdFromSportsJson(String jsonData) {
+        if (jsonData == null || jsonData.trim().isEmpty()) {
+            return "";
+        }
+        try {
+            JSONObject payload = new JSONObject(jsonData);
+            return safeStudentId(payload.optString("xh", ""));
+        } catch (Exception e) {
+            Log.w("http", "extractStudentIdFromSportsJson failed", e);
+            return "";
+        }
     }
 
     private static String randomFrom(String[] values) {

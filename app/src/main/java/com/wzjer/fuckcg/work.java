@@ -71,7 +71,7 @@ public class work {
                 return buildErrorJson("auth credentials are unavailable, please login again");
             }
 
-            String responseText = http.get("/api/l/v7/sportsId", null, userBody.jwt, userBody.secret);
+            String responseText = http.get(safeContext, "/api/l/v7/sportsId", null, userBody.jwt, userBody.secret, safeStudentId);
             if (responseText.trim().isEmpty()) {
                 return buildErrorJson("request sportId failed: empty response");
             }
@@ -130,7 +130,7 @@ public class work {
             }
             params.put("type", type);
 
-            String responseText = http.get(endpoint, params, userBody.jwt, userBody.secret);
+            String responseText = http.get(safeContext, endpoint, params, userBody.jwt, userBody.secret, studentId);
             if (responseText == null || responseText.trim().isEmpty()) {
                 return buildErrorJson("request sport records failed: empty response");
             }
