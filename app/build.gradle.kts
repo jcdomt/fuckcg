@@ -10,8 +10,8 @@ android {
         applicationId = "com.wzjer.fuckcg"
         minSdk = 24
         targetSdk = 35
-        versionCode = 13010
-        versionName = "1.3.1"
+        versionCode = 14020
+        versionName = "1.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
