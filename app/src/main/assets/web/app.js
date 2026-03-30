@@ -798,7 +798,8 @@
                 if (!currentSportId || !sportIdFetchedAtMs) {
                     setStatus(status, '正在生成 UploadJsonSports...', 'info');
                 }
-                const resultText = window.Bridge.buildUploadJsonSports(identity.studentId, identity.studentName);
+                // 把持久化保存的 sportIdFetchedAtMs 传给 Java 侧，避免重启后丢失时间基准
+                const resultText = window.Bridge.buildUploadJsonSports(identity.studentId, identity.studentName, String(sportIdFetchedAtMs || 0));
                 const result = safeParseJson(resultText, null);
 
                 if (!result) {

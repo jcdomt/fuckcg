@@ -25,6 +25,10 @@ public class work {
     }
 
     public static String buildUploadJsonSportsJson(Context context, String studentId, String studentName) {
+        return buildUploadJsonSportsJson(context, studentId, studentName, 0L);
+    }
+
+    public static String buildUploadJsonSportsJson(Context context, String studentId, String studentName, long fetchedAtMs) {
         String safeStudentId = studentId == null ? "" : studentId.trim();
         String safeStudentName = studentName == null ? "" : studentName.trim();
         if (safeStudentId.isEmpty()) {
@@ -40,21 +44,28 @@ public class work {
         }
 
         try {
-            // 先请求 sportId，取得服务器返回的时间戳
-            String sportIdJsonStr = requestSportIdJson(safeContext, safeStudentId, safeStudentName);
-            JSONObject sportIdJson;
-            try {
-                sportIdJson = new JSONObject(sportIdJsonStr);
-            } catch (Exception e) {
-                return buildErrorJson("failed to parse sportId response: " + e.getMessage());
-            }
-            if (sportIdJson.has("error")) {
-                return sportIdJsonStr;
-            }
+            long beginTimestampMs;
 
-            // beginTime = sportId 请求的 timestamp + 2 秒，并锁定此值
-            long sportIdTimestamp = sportIdJson.optLong("timestamp", System.currentTimeMillis());
-            long beginTimestampMs = sportIdTimestamp + 2000L;
+            if (fetchedAtMs > 0) {
+                // 前端已持久化保存了 sportId 的获取时间，直接用 fetchedAtMs + 2 秒
+                beginTimestampMs = fetchedAtMs + 2000L;
+                Log.d(TAG, "buildUploadJsonSportsJson: using persisted fetchedAtMs=" + fetchedAtMs + ", beginTimestampMs=" + beginTimestampMs);
+            } else {
+                // 前端没有传入有效的 fetchedAtMs（首次或重置），才请求新的 sportId
+                String sportIdJsonStr = requestSportIdJson(safeContext, safeStudentId, safeStudentName);
+                JSONObject sportIdJson;
+                try {
+                    sportIdJson = new JSONObject(sportIdJsonStr);
+                } catch (Exception e) {
+                    return buildErrorJson("failed to parse sportId response: " + e.getMessage());
+                }
+                if (sportIdJson.has("error")) {
+                    return sportIdJsonStr;
+                }
+                long sportIdTimestamp = sportIdJson.optLong("timestamp", System.currentTimeMillis());
+                beginTimestampMs = sportIdTimestamp + 2000L;
+                Log.d(TAG, "buildUploadJsonSportsJson: fetched new sportId, timestamp=" + sportIdTimestamp + ", beginTimestampMs=" + beginTimestampMs);
+            }
 
             com.wzjer.fuckcg.cg.UploadJsonSports sportBean = com.wzjer.fuckcg.fake.generateFakeSportBean(safeContext, safeStudentId, safeStudentName, beginTimestampMs);
             JSONObject json = toJsonObject(sportBean);

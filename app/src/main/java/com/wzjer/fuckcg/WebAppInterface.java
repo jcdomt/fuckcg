@@ -208,7 +208,18 @@ public class WebAppInterface {
     @SuppressWarnings("unused")
     @JavascriptInterface
     public String buildUploadJsonSports(String studentId, String studentName) {
-        return work.buildUploadJsonSportsJson(mContext, studentId, studentName);
+        return work.buildUploadJsonSportsJson(mContext, studentId, studentName, 0L);
+    }
+
+    //noinspection unused
+    @SuppressWarnings("unused")
+    @JavascriptInterface
+    public String buildUploadJsonSports(String studentId, String studentName, String fetchedAtMsStr) {
+        long fetchedAtMs = 0L;
+        try {
+            fetchedAtMs = Long.parseLong(fetchedAtMsStr == null ? "0" : fetchedAtMsStr.trim());
+        } catch (NumberFormatException ignored) {}
+        return work.buildUploadJsonSportsJson(mContext, studentId, studentName, fetchedAtMs);
     }
 
     //noinspection unused
