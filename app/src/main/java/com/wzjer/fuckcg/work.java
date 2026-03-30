@@ -40,7 +40,23 @@ public class work {
         }
 
         try {
-            com.wzjer.fuckcg.cg.UploadJsonSports sportBean = com.wzjer.fuckcg.fake.generateFakeSportBean(safeContext, safeStudentId, safeStudentName);
+            // 先请求 sportId，取得服务器返回的时间戳
+            String sportIdJsonStr = requestSportIdJson(safeContext, safeStudentId, safeStudentName);
+            JSONObject sportIdJson;
+            try {
+                sportIdJson = new JSONObject(sportIdJsonStr);
+            } catch (Exception e) {
+                return buildErrorJson("failed to parse sportId response: " + e.getMessage());
+            }
+            if (sportIdJson.has("error")) {
+                return sportIdJsonStr;
+            }
+
+            // beginTime = sportId 请求的 timestamp + 2 秒，并锁定此值
+            long sportIdTimestamp = sportIdJson.optLong("timestamp", System.currentTimeMillis());
+            long beginTimestampMs = sportIdTimestamp + 2000L;
+
+            com.wzjer.fuckcg.cg.UploadJsonSports sportBean = com.wzjer.fuckcg.fake.generateFakeSportBean(safeContext, safeStudentId, safeStudentName, beginTimestampMs);
             JSONObject json = toJsonObject(sportBean);
             Log.d(TAG, "uploadJsonSports json=\n" + json);
             return json.toString();

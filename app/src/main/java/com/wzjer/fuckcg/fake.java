@@ -177,6 +177,144 @@ public class fake {
         return uploadJsonSports;
     }
 
+    public static com.wzjer.fuckcg.cg.UploadJsonSports generateFakeSportBean(Context context, String studentId, String studentName, long beginTimestampMs) {
+        bind(context);
+        com.wzjer.fuckcg.cg.SportBean sportBean = new com.wzjer.fuckcg.cg.SportBean();
+        com.wzjer.fuckcg.cg.UploadJsonSports uploadJsonSports = new com.wzjer.fuckcg.cg.UploadJsonSports();
+        try {
+            double TARGET_KM = 2;
+            String sportId = UUID.randomUUID().toString();
+
+            double plannedOdometerKm = TARGET_KM + Math.random() / 3.0;
+            double plannedMinutes = 5.0 * TARGET_KM + Math.random() * TARGET_KM * 3.0;
+            long durationMillis = Math.max(60_000L, (long) (plannedMinutes * 60_000));
+            double durationMinutes = durationMillis / 60_000.0;
+
+            // beginTime 锁定为传入的 beginTimestampMs，endTime = beginTime + durationMillis
+            long endTimestamp = beginTimestampMs + durationMillis;
+
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+            Calendar calBegin = Calendar.getInstance();
+            calBegin.setTimeInMillis(beginTimestampMs);
+            String beginTime = dateFormat.format(calBegin.getTime());
+
+            Calendar calEnd = Calendar.getInstance();
+            calEnd.setTimeInMillis(endTimestamp);
+            String endTime = dateFormat.format(calEnd.getTime());
+
+            int isValid = 1;
+            String isValidReason = "";
+
+            double targetMeters = plannedOdometerKm * 1000.0;
+            int stepCount = estimateStepCount(targetMeters);
+
+            List<SportLatLngBean> routeData = generateFakeRouteData(appContext, beginTimestampMs, durationMinutes);
+            if (routeData.isEmpty()) {
+                routeData = createFallbackRouteData(beginTimestampMs, durationMinutes, plannedOdometerKm);
+            }
+            routeData = normalizeRouteData(routeData, beginTimestampMs, durationMillis, targetMeters, stepCount);
+
+            double odometer = targetMeters / 1000.0;
+            double speed = odometer / durationMinutes * 60.0;
+            String avgSpeed = format2(speed);
+            String avgPace = formatPaceFromSpeed(speed);
+            int paceKmCount = Math.max(0, (int) Math.floor(odometer));
+            double remainKm = Math.max(0.0, odometer - paceKmCount);
+            long lastOdometerMillis = Math.round((remainKm / Math.max(speed, 0.0001)) * 3_600_000.0);
+            String lastOdometerTime = formatDurationHms(lastOdometerMillis);
+            String activeTime = formatDurationHms(durationMillis);
+            double calorie = Math.round((320.0 / 30.0) * durationMinutes * 10.0) / 10.0;
+            double stepMinute = stepCount / durationMinutes;
+
+            int minuteCount = Math.max(1, (int) Math.round(durationMinutes));
+            List<Double> minuteSpeedValues = buildMinuteSpeedSeries(speed, minuteCount);
+            double maxSpeedVal = speed;
+            double minSpeedVal = speed;
+            for (int i = 0; i < minuteSpeedValues.size(); i++) {
+                double v = minuteSpeedValues.get(i);
+                maxSpeedVal = Math.max(maxSpeedVal, v);
+                minSpeedVal = Math.min(minSpeedVal, v);
+
+                com.wzjer.fuckcg.cg.CminuteSpeedstr cminuteSpeedstr = new com.wzjer.fuckcg.cg.CminuteSpeedstr();
+                cminuteSpeedstr.min = String.valueOf(i + 1);
+                cminuteSpeedstr.v = format2(v);
+                sportBean.addCminuteSpeedstr(cminuteSpeedstr);
+            }
+            String maxSpeed = format2(maxSpeedVal);
+            String minSpeed = format2(minSpeedVal);
+
+            for (int i = 1; i <= paceKmCount; i++) {
+                com.wzjer.fuckcg.cg.Cpacestr cpacestr = new com.wzjer.fuckcg.cg.Cpacestr();
+                cpacestr.km = String.valueOf(i);
+                double kmSpeed = speed * (0.97 + Math.random() * 0.06);
+                cpacestr.t = formatPaceFromSpeed(kmSpeed);
+                sportBean.addPaceStr(cpacestr);
+            }
+
+            for (SportLatLngBean point : routeData) {
+                sportBean.addSportLatLngBean(point);
+            }
+
+            sportBean.sportId = sportId;
+            sportBean.startDate = beginTime;
+            sportBean.endDate = endTime;
+            sportBean.startDateLong = beginTimestampMs;
+            sportBean.endDateLong = endTimestamp;
+            sportBean.distance = odometer;
+            sportBean.validOdometer = odometer;
+            sportBean.totalStep = stepCount;
+            sportBean.stepMinute = format2(stepMinute);
+            sportBean.avgSpeed = avgSpeed;
+            sportBean.maxSpeedPerHour = maxSpeed;
+            sportBean.minSpeedPerHour = minSpeed;
+            sportBean.lastOdometerTime = lastOdometerTime;
+            sportBean.avgPace = avgPace;
+            sportBean.cal = calorie;
+            sportBean.dlTime = activeTime;
+            sportBean.dllc = format2(odometer);
+            sportBean.activityStatus = com.wzjer.fuckcg.cg.SportBean.ACTIVITY_STATUS_FINISH;
+            sportBean.validCount = isValid;
+            sportBean.isValidReason = isValidReason;
+
+            uploadJsonSports.activeTime = activeTime;
+            uploadJsonSports.alreadyPassPoint = "1;2;3;4;5";
+            uploadJsonSports.alreadyPassPointResult = "";
+            uploadJsonSports.avgPace = avgPace;
+            uploadJsonSports.avgSpeed = avgSpeed;
+            uploadJsonSports.beganPoint = routeData.get(0).a + "|" + routeData.get(0).o;
+            uploadJsonSports.beginTime = beginTime;
+            uploadJsonSports.calorie = calorie;
+            uploadJsonSports.coordinate = routeData;
+            uploadJsonSports.endPoint = routeData.get(routeData.size() - 1).a + "|" + routeData.get(routeData.size() - 1).o;
+            uploadJsonSports.endTime = endTime;
+            uploadJsonSports.indoor = 0;
+            uploadJsonSports.isValid = 1;
+            uploadJsonSports.isValidReason = "";
+            uploadJsonSports.lastOdometerTime = lastOdometerTime;
+            uploadJsonSports.maxSpeedPerHour = maxSpeed;
+            uploadJsonSports.minSpeedPerHour = minSpeed;
+            uploadJsonSports.minuteSpeed = sportBean.minuteSpeedStr;
+            uploadJsonSports.modementMode = "1";
+            uploadJsonSports.name = studentName == null ? "" : studentName.trim();
+            uploadJsonSports.needPassPointCount = "5";
+            uploadJsonSports.odometer = format2(odometer);
+            uploadJsonSports.pace = sportBean.paceStr;
+            uploadJsonSports.phoneVersion = "Android,31,13|2.9.5";
+            uploadJsonSports.planRouteName = "校内定向线路";
+            uploadJsonSports.routeId = "81";
+            uploadJsonSports.routePolylineBh = "14756949";
+            uploadJsonSports.sportId = sportId;
+            uploadJsonSports.sportImages = "";
+            uploadJsonSports.stepCount = stepCount;
+            uploadJsonSports.stepMinute = format2(stepMinute);
+            uploadJsonSports.xh = studentId == null ? "" : studentId.trim();
+            uploadJsonSports.randomPointStr = "[]";
+        } catch (Exception e) {
+            Log.e(TAG, "generateFakeSportBean failed", e);
+        }
+        return uploadJsonSports;
+    }
+
     private static String padZero(double num)  {
         int intValue = (int) num; // 将double转换为int，截断小数部分
         if (intValue < 10) {
