@@ -2,6 +2,54 @@
     const LOGIN_PAGE = 'login.html';
     const WORK_PAGE = 'work.html';
 
+    /**
+     * 显示一个自定义 Modal 弹窗，兼容 WebView 环境（不依赖 alert）。
+     * @param {string} title - 弹窗标题
+     * @param {string} message - 弹窗正文（支持 \n 换行）
+     */
+    function showModal(title, message) {
+        var existing = document.getElementById('_appModal');
+        if (existing) {
+            existing.parentNode.removeChild(existing);
+        }
+
+        var overlay = document.createElement('div');
+        overlay.id = '_appModal';
+        overlay.className = 'app-modal-overlay';
+
+        var box = document.createElement('div');
+        box.className = 'app-modal-box';
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'app-modal-title';
+        titleEl.textContent = title;
+
+        var bodyEl = document.createElement('div');
+        bodyEl.className = 'app-modal-body';
+        // 将 \n 转为 <br>
+        message.split('\n').forEach(function (line, i, arr) {
+            bodyEl.appendChild(document.createTextNode(line));
+            if (i < arr.length - 1) {
+                bodyEl.appendChild(document.createElement('br'));
+            }
+        });
+
+        var btn = document.createElement('button');
+        btn.className = 'app-modal-btn';
+        btn.textContent = '确定';
+        btn.addEventListener('click', function () {
+            overlay.parentNode && overlay.parentNode.removeChild(overlay);
+        });
+
+        box.appendChild(titleEl);
+        box.appendChild(bodyEl);
+        box.appendChild(btn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+
+        btn.focus();
+    }
+
     function hasBridgeMethod(name) {
         return typeof window.Bridge !== 'undefined' && window.Bridge && typeof window.Bridge[name] === 'function';
     }
@@ -845,6 +893,29 @@
                 if (!hasBridgeMethod('submitSportsData')) {
                     setStatus(status, '当前环境不支持提交接口。', 'error');
                     return;
+                }
+
+                // 判断当前真实时间是否已超过 endTime
+                if (resultJson.endTime) {
+                    // endTime 格式：'yyyy-MM-dd HH:mm:ss'，直接 replace 空格为 'T' 让 Date 能解析
+                    var endTimeMs = Date.parse(resultJson.endTime.replace(' ', 'T'));
+                    if (!isNaN(endTimeMs)) {
+                        var nowMs = Date.now();
+                        var diffMs = endTimeMs - nowMs;
+                        if (diffMs > 0) {
+                            var diffMinutes = Math.ceil(diffMs / 60000);
+                            showModal(
+                                '⏳ 运动还未结束',
+                                '请在约 ' + diffMinutes + ' 分钟后再提交。\n\nendTime：' + resultJson.endTime + "\n或者重新生成一次换个时间"
+                            );
+                            setStatus(
+                                status,
+                                '⏳ 运动还未结束！请在约 ' + diffMinutes + ' 分钟后再提交（endTime：' + resultJson.endTime + '）。\n或者重新生成一次换个时间',
+                                'error'
+                            );
+                            return;
+                        }
+                    }
                 }
 
                 setStatus(status, '正在提交 HTTP 请求，请稍候...', 'info');
